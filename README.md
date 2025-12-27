@@ -24,10 +24,7 @@ apt-get update && apt-get install -y tree
 mkdir -p /app
 cd /app
 
-pip install \
-  "pyarrow>=15.0.0" \
-  pyyaml \
-  "pyspark[pipelines]"
+pip install "pyspark[pipelines]"
 ```
 
 ## Initialize SDP Project
