@@ -1,0 +1,53 @@
+services:
+  spark:
+    image: spark-sdp:local
+    container_name: spark_sdp
+    user: root
+    volumes:
+      - raw-volume:/app/sdp/pipeline-storage 
+      - ./src:/app
+    healthcheck:
+      test: ["CMD", "ls", "/app/sdp/pipeline-storage"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: >
+      bash -c "
+        # 1. Move to the app directory
+        cd /app && 
+        
+        # 2. Check if the pipeline config exists. 
+        # If it doesn't, we need to initialize.
+        if [ ! -f sdp/pipeline.yml ]; then
+          echo 'Initializing pipeline...'
+          # We run init in a temp folder to avoid the 'Directory exists' error,
+          # then move only the configuration files into /app/sdp
+          mkdir -p /tmp/init_sdp && cd /tmp/init_sdp
+          spark-pipelines init --name sdp
+          
+          # Move everything EXCEPT the storage directory (the mount point)
+          cp -rn sdp/* /app/sdp/ 2>/dev/null || true
+          cd /app
+        fi &&
+
+        # 3. Keep the container alive
+        echo 'Spark SDP is ready.' &&
+        tail -f /dev/null
+      "
+
+  ingestion:
+    image: ghcr.io/cynicdog/uptown-downtown/ingestion:latest
+    container_name: mta_ingestion
+    volumes:
+      - raw-volume:/data/raw
+    environment:
+      - RAW_BASE_PATH=/data/raw
+      - POLL_INTERVAL_SECONDS=30
+    restart: on-failure
+
+    depends_on:
+      spark:
+        condition: service_healthy
+
+volumes:
+  raw-volume:

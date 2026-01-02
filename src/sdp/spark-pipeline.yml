@@ -1,0 +1,6 @@
+
+name: sdp
+storage: file:///tmp/init_sdp/sdp/pipeline-storage
+libraries:
+  - glob:
+      include: transformations/**
