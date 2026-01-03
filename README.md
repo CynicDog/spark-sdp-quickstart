@@ -1,44 +1,28 @@
-# spark-sdp-quickstart
+# Spark-SDP Quickstart
 
-Minimal setup for experimenting with **Spark Declarative Pipelines (SDP)** using Spark 4.1.
+An environment for **Spark Declarative Pipelines (SDP)** on Spark 4.1.
 
-## Requirements
+### 1. Start Environment
 
-* Docker
-
-## Run Spark
+Spin up the container using Docker Compose:
 
 ```bash
-docker run -it \
-  --name spark-sdp-test \
-  --user root \
-  apache/spark:4.1.0-scala2.13-java21-python3-ubuntu \
-  /bin/bash
+docker-compose up -d
 ```
 
-## Setup
+### 2. Access
+
+Enter the container and navigate to the project directory and : 
 
 ```bash
-apt-get update && apt-get install -y tree
-
-mkdir -p /app
-cd /app
-
-pip install "pyspark[pipelines]"
+cd /app/sdp
+docker exec -it spark-sdp /bin/bash
 ```
 
-## Initialize SDP Project
+### 3. Run Pipeline
+
+trigger the execution:
 
 ```bash
-/opt/spark/bin/spark-pipelines init --name sdp_demo
+spark-pipelines run
 ```
-
-## ...
-```bash
-root@ed568c711d10:/app/sdp# spark-pipelines run     
-```
-
-## Notes
-
-* SDP is **CLI-driven**, not for notebooks or interactive execution
-* Pipelines are defined declaratively and executed by Spark
