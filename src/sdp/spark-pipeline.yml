@@ -1,6 +1,8 @@
 
 name: sdp
-storage: file:///tmp/init_sdp/sdp/pipeline-storage
+storage: file:///app/sdp/checkpoints
 libraries:
   - glob:
       include: transformations/**
+configuration:
+  spark.sql.streaming.schemaInference: "true"

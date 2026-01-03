@@ -33,6 +33,11 @@ pip install "pyspark[pipelines]"
 /opt/spark/bin/spark-pipelines init --name sdp_demo
 ```
 
+## ...
+```bash
+root@ed568c711d10:/app/sdp# spark-pipelines run     
+```
+
 ## Notes
 
 * SDP is **CLI-driven**, not for notebooks or interactive execution
