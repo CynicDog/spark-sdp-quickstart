@@ -1,30 +1,45 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
+from pyspark.sql.types import StructType, StructField, StringType, BooleanType, IntegerType, DateType, TimestampType
 from pyspark.sql import SparkSession
 
 spark = SparkSession.active()
 
+mta_schema = StructType([
+    StructField('actual_track', StringType(), True),
+    StructField('arrival_time', StringType(), True),   # Raw ISO8601 string
+    StructField('departure_time', StringType(), True), # Raw ISO8601 string
+    StructField('direction', StringType(), True),
+    StructField('ingestion_ts', StringType(), True),
+    StructField('is_assigned', BooleanType(), True),
+    StructField('route_id', StringType(), True),
+    StructField('scheduled_track', StringType(), True),
+    StructField('stop_id', StringType(), True),
+    StructField('train_id', StringType(), True),
+    StructField('trip_id', StringType(), True),
+    StructField('date', DateType(), True),
+    StructField('hour', IntegerType(), True)
+])
+
 input_path = "/app/sdp/pipeline-storage/"
-inferred_schema = spark.read.json(input_path).limit(1).schema
 
 @dp.table(name="raw_mta_data")
 def ingest_jsonl():
-    raw_stream = (spark.readStream
-                  .format("json")
-                  .schema(inferred_schema)
-                  .option("multiLine", "false")
-                  .load(input_path))
-
-    return raw_stream
+    return (spark.readStream
+            .format("json")
+            .schema(mta_schema)
+            .option("multiLine", "false")
+            .load(input_path))
 
 @dp.table(name="cleaned_mta_data")
 def clean_data():
-    # Transform raw to cleaned
     source_df = spark.readStream.table("raw_mta_data")
 
+    # Convert 'arrival_time' to a proper Timestamp for future Watermarking
     cleaned_df = (source_df
                   .withColumn("route_id", F.upper(F.col("route_id")))
-                  .withColumn("timestamp", F.current_timestamp()))
+                  .withColumn("event_time", F.to_timestamp(F.col("arrival_time")))
+                  .withColumn("processing_ts", F.current_timestamp()))
 
     return cleaned_df
 
