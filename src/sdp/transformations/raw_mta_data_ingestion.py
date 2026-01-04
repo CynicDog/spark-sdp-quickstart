@@ -54,12 +54,12 @@ def ingest_and_calculate():
             F.window(F.col("event_time"), "10 minutes", "5 minutes"),
             F.col("route_id")
         )
-        .count())
+        .count()
+        .withColumn("window_start", F.col("window.start"))
+        .withColumn("window_end", F.col("window.end"))
+        .drop("window"))
 
-    return (windowed_counts
-            .withColumn("window_start", F.col("window.start"))
-            .withColumn("window_end", F.col("window.end"))
-            .drop("window"))
+    return windowed_counts
 
 @dp.materialized_view(name="top_5_routes_every10mins")
 def top_5_sink():
