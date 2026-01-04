@@ -23,44 +23,58 @@ mta_schema = StructType([
 
 input_path = "/app/sdp/pipeline-storage/"
 
-@dp.table(name="raw_mta_data")
-def ingest_jsonl():
-    return (spark.readStream
-            .format("json")
-            .schema(mta_schema)
-            .option("multiLine", "false")
-            .load(input_path))
+@dp.table(name="streaming_windowed_counts")
+def ingest_and_calculate():
+    """Ingests raw MTA data and performs stateful windowed aggregation.
 
-@dp.table(name="cleaned_mta_data")
-def clean_data():
-    source_df = spark.readStream.table("raw_mta_data")
+    This function defines a streaming table that parses JSON files, normalizes
+    route IDs, and calculates route frequencies over a 10-minute sliding window
+    with watermarking to handle late-arriving data.
 
-    # Convert 'arrival_time' to a proper Timestamp for future Watermarking
-    cleaned_df = (source_df
+    Returns:
+        pyspark.sql.DataFrame: A streaming DataFrame containing windowed route counts.
+    """
+    # Loading data from a streaming source
+    raw_stream = (spark.readStream
+                  .format("json")
+                  .schema(mta_schema)
+                  .option("multiLine", "false")
+                  .load(input_path))
+
+    # Incremental transformations for cleansing and event-time extraction
+    cleaned_df = (raw_stream
                   .withColumn("route_id", F.upper(F.col("route_id")))
                   .withColumn("event_time", F.to_timestamp(F.col("arrival_time")))
                   .withColumn("processing_ts", F.current_timestamp()))
 
-    return cleaned_df
+    # Stateful Aggregation (Watermarking + Windowing)
+    windowed_counts = (cleaned_df
+        .withWatermark("event_time", "10 minutes")
+        .groupBy(
+            F.window(F.col("event_time"), "10 minutes", "5 minutes"),
+            F.col("route_id")
+        )
+        .count())
 
-@dp.materialized_view(name="top_5_routes_summary")
-def calculate_top_routes():
-    # Aggregate and rank
-    silver_df = spark.table("cleaned_mta_data")
+    return (windowed_counts
+            .withColumn("window_start", F.col("window.start"))
+            .withColumn("window_end", F.col("window.end"))
+            .drop("window"))
 
-    ranked_df = (silver_df
-                 .groupBy("route_id")
-                 .count()
-                 .orderBy(F.col("count").desc())
-                 .limit(5))
+@dp.materialized_view(name="top_5_routes_every10mins")
+def top_5_sink():
+    """Materializes a batch snapshot of the top 5 busiest subway routes.
+
+    Reads from the intermediate 'streaming_windowed_counts' table and applies
+    global sorting and limiting. Using a materialized view ensures the result
+    is precomputed into a table.
+
+    Returns:
+        pyspark.sql.DataFrame: A batch DataFrame representing the current top 5 leaderboard.
+     """
+    # Querying a table defined earlier in the pipeline
+    ranked_df = (spark.table("streaming_windowed_counts")
+            .orderBy(F.col("count").desc())
+            .limit(5))
 
     return ranked_df
-
-dp.create_streaming_table(name="mta_parquet_sink")
-
-@dp.append_flow(target="mta_parquet_sink", name="export_to_parquet_flow")
-def export_flow():
-    # Bridge batch view to streaming sink
-    summary_stream = spark.readStream.table("top_5_routes_summary")
-
-    return summary_stream
